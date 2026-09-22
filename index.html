@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Adaptive AI Trader</title>
+<style>
+:root{--bg:#080d19;--card:#121a2c;--line:#27334d;--text:#edf2ff;--muted:#93a0bd;--accent:#5b7cff;--good:#55d89a;--bad:#ff718c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
+.app{max-width:980px;margin:auto;padding:14px 14px 90px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 2px 14px}
+h1{font-size:23px;margin:0}.muted,small{color:var(--muted)}button,select,input{border:1px solid var(--line);background:#0d1425;color:var(--text);border-radius:11px;padding:11px;font:inherit}button{background:var(--accent);border:0;font-weight:700}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#0c1221;border-top:1px solid var(--line);display:flex;justify-content:center;z-index:5}.nav button{background:transparent;border-radius:0;width:25%;max-width:220px;color:var(--muted)}
+.nav button.active{color:#fff;background:#151e34}.page{display:none}.page.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:15px;margin:10px 0}.stat{background:#0d1425;border-radius:13px;padding:13px}.value{font-size:20px;font-weight:750;margin-top:4px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+canvas{width:100%;height:260px;border-radius:12px;background:#0d1425}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#1c2947;font-size:12px}.good{color:var(--good)}.bad{color:var(--bad)}
+.trade{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}.sectiontitle{margin:5px 0 12px}
+.switch{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top"><div><h1>Adaptive AI Trader</h1><small>Paper trading • adaptive learning</small></div><span id="status" class="pill">Learning</span></header>
+
+<section id="dashboard" class="page active">
+<div class="grid">
+<div class="stat"><small>Balance</small><div id="balance" class="value">$10,000.00</div></div>
+<div class="stat"><small>Return</small><div id="return" class="value">0.00%</div></div>
+<div class="stat"><small>Win rate</small><div id="winrate" class="value">0.0%</div></div>
+<div class="stat"><small>Trades</small><div id="trades" class="value">0</div></div>
+</div>
+<div class="card"><h3 class="sectiontitle">Equity curve</h3><canvas id="equity"></canvas></div>
+<div class="card">
+<div class="row">
+<div><small>Market</small><select id="market"><option>BTC/USD</option><option>ETH/USD</option><option>S&P 500</option></select></div>
+<div><small>Mode</small><select id="modeSelect"><option value="sim">Simulation</option><option value="manual">Manual step</option></select></div>
+</div>
+<div style="height:10px"></div><div class="btnrow"><button id="startBtn">Start</button><button id="stepBtn">Next candle</button></div>
+<div id="signal" class="muted" style="margin-top:12px">Waiting for data…</div>
+</div>
+</section>
+
+<section id="charts" class="page">
+<div class="card"><h3 class="sectiontitle">Price chart</h3><canvas id="price"></canvas></div>
+<div class="card"><h3 class="sectiontitle">Strategy weights</h3><canvas id="weights"></canvas></div>
+</section>
+
+<section id="learning" class="page">
+<div class="card"><h3>Adaptive learning</h3><p class="muted">The bot keeps local learning data in your browser. It scores trend, momentum and mean-reversion rules and adjusts their weights from simulated outcomes.</p>
+<div id="learningText"></div></div>
+<div class="card"><h3>Current parameters</h3><div id="params" class="muted"></div></div>
+</section>
+
+<section id="history" class="page">
+<div class="card"><h3>Trade history</h3><div id="historyList" class="muted">No trades yet.</div></div>
+</section>
+
+<section id="settings" class="page">
+<div class="card"><h3>Settings</h3>
+<div class="switch"><span>Starting balance</span><input id="startBalance" type="number" min="100" step="100" style="width:130px"></div>
+<div class="switch"><span>Auto-save learning</span><input id="autosave" type="checkbox" checked></div>
+<div class="switch"><span>Position sizing</span><select id="risk" style="width:145px"><option value="0.5">Low</option><option value="1" selected>Normal</option><option value="1.5">Higher</option></select></div>
+<div style="height:12px"></div><button id="saveSettings" style="width:100%">Save settings</button>
+</div>
+<div class="card"><h3>Reset</h3><p class="muted">This clears the balance, trade history, price history and learned strategy weights saved on this device.</p><button id="reset" style="width:100%;background:#8d2d46">Reset everything</button></div>
+<div class="card"><small>Safety: this PWA is a simulator. It does not connect to a broker or place real-money orders.</small></div>
+</section>
+</div>
+
+<nav class="nav">
+<button data-page="dashboard" class="active">Dashboard</button><button data-page="charts">Charts</button><button data-page="learning">AI</button><button data-page="history">Trades</button><button data-page="settings">Settings</button>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY="adaptiveTraderV2";
+let timer=null;
+let s=load()||{balance:10000,start:10000,price:100,prices:[],equity:[],position:null,trades:[],wins:0,lossStreak:0,cooldown:0,weights:{trend:1,momentum:1,revert:1},risk:1,autosave:true};
+
+function save(){if(s.autosave)localStorage.setItem(KEY,JSON.stringify(s))}
+function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
+function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function sma(n){if(s.prices.length<n)return null;let a=s.prices.slice(-n);return a.reduce((x,y)=>x+y,0)/n}
+function candle(){s.price=Math.max(.1,s.price*(1+((Math.random()-.5)*.8+randn()*1.35)/100));s.prices.push(s.price);if(s.prices.length>150)s.prices.shift()}
+function score(){let a=sma(10),b=sma(30),p=s.price;if(!b)return{trend:0,momentum:0,revert:0};return{trend:(p-b)/b,momentum:a?a/b-1:0,revert:-(p-b)/b}}
+function signal(){
+ if(s.cooldown>0){s.cooldown--;return"HOLD"}
+ let x=score(),t=s.weights.trend+s.weights.momentum+s.weights.revert;
+ let v=(x.trend*s.weights.trend+x.momentum*s.weights.momentum+x.revert*s.weights.revert)/t;
+ let threshold=.0015+s.lossStreak*.0007;
+ return v>threshold?"BUY":v<-threshold?"SELL":"HOLD"
+}
+function trade(sig){
+ if(!s.position&&(sig==="BUY"||sig==="SELL")){s.position={side:sig,entry:s.price,size:.01*s.risk/(1+s.lossStreak*.5)};return}
+ if(!s.position)return;
+ let p=s.position,move=(s.price-p.entry)/p.entry;
+ let pnl=(p.side==="BUY"?move:-move)*s.balance*p.size;
+ if((p.side==="BUY"&&sig==="SELL")||(p.side==="SELL"&&sig==="BUY")||move>.012||move<-.008){
+  s.balance+=pnl;let win=pnl>0;s.wins+=win?1:0;s.trades.unshift({side:p.side,entry:p.entry,exit:s.price,pnl,win});
+  if(win){s.lossStreak=0;s.cooldown=0}else{s.lossStreak++;s.cooldown=Math.min(3,s.lossStreak)}
+  let sc=score();for(let k of["trend","momentum","revert"]){let aligned=p.side==="BUY"?sc[k]>0:sc[k]<0;s.weights[k]=Math.max(.2,Math.min(3,s.weights[k]+(win?.04:-.025)*(aligned?1:-.5)))}
+  s.position=null;
+ }
+}
+function step(){candle();trade(signal());s.equity.push(s.balance);if(s.equity.length>150)s.equity.shift();save();render()}
+function line(canvas,data){let ctx=canvas.getContext("2d"),w=canvas.clientWidth,h=260,d=devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;ctx.scale(d,d);ctx.clearRect(0,0,w,h);if(data.length<2)return;let min=Math.min(...data),max=Math.max(...data),pad=12;ctx.beginPath();data.forEach((v,i)=>{let x=pad+i*(w-24)/(data.length-1),y=h-pad-(v-min)/(max-min||1)*(h-24);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle="#6f8cff";ctx.lineWidth=2;ctx.stroke()}
+function bars(canvas,vals){let ctx=canvas.getContext("2d"),w=canvas.clientWidth,h=260,d=devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;ctx.scale(d,d);ctx.clearRect(0,0,w,h);let names=["Trend","Momentum","Revert"],max=3;vals.forEach((v,i)=>{let x=35+i*(w-70)/3,bh=(v/max)*(h-55);ctx.fillStyle="#6f8cff";ctx.fillRect(x,h-35-bh,(w-100)/3,bh);ctx.fillStyle="#9ca8c5";ctx.font="12px system-ui";ctx.fillText(names[i],x,h-14);ctx.fillText(v.toFixed(2),x,h-42-bh)})}
+function render(){
+ $("balance").textContent="$"+s.balance.toFixed(2);$("return").textContent=((s.balance/s.start-1)*100).toFixed(2)+"%";
+ $("winrate").textContent=(s.trades.length?s.wins/s.trades.length*100:0).toFixed(1)+"%";$("trades").textContent=s.trades.length;
+ $("status").textContent=s.lossStreak>=2?"Selective":"Learning";
+ $("signal").textContent=`${$("market").value} • ${s.price.toFixed(2)} • Signal: ${signal()}${s.position?" • Open "+s.position.side+" @ "+s.position.entry.toFixed(2):""}`;
+ $("learningText").innerHTML=`<p>Trades: <b>${s.trades.length}</b> · Wins: <b>${s.wins}</b> · Current loss streak: <b>${s.lossStreak}</b></p>`;
+ $("params").textContent=`Trend ${s.weights.trend.toFixed(2)} · Momentum ${s.weights.momentum.toFixed(2)} · Mean reversion ${s.weights.revert.toFixed(2)} · Risk ${s.risk}x`;
+ $("historyList").innerHTML=s.trades.length?s.trades.slice(0,30).map(t=>`<div class="trade"><span>${t.side} @ ${t.entry.toFixed(2)} → ${t.exit.toFixed(2)}</span><b class="${t.win?'good':'bad'}">${t.pnl>=0?"+":""}${t.pnl.toFixed(2)}</b></div>`).join(""):"No trades yet.";
+ line($("price"),s.prices);line($("equity"),s.equity.length?s.equity:[s.balance]);bars($("weights"),[s.weights.trend,s.weights.momentum,s.weights.revert]);
+}
+document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(b.dataset.page).classList.add("active");render()});
+$("stepBtn").onclick=step;
+$("startBtn").onclick=()=>{if(timer){clearInterval(timer);timer=null;$("startBtn").textContent="Start"}else{timer=setInterval(step,700);$("startBtn").textContent="Stop"}};
+$("saveSettings").onclick=()=>{s.start=Math.max(100,Number($("startBalance").value)||10000);s.balance=s.start;s.risk=Number($("risk").value);s.autosave=$("autosave").checked;save();render();alert("Settings saved")};
+$("reset").onclick=()=>{localStorage.removeItem(KEY);location.reload()};
+$("startBalance").value=s.start;$("risk").value=s.risk;$("autosave").checked=s.autosave;
+for(let i=0;i<35;i++)candle();if(!s.equity.length)s.equity.push(s.balance);render();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>

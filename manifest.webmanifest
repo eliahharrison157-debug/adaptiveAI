@@ -1,0 +1,10 @@
+{
+  "name":"Adaptive AI Trader",
+  "short_name":"AI Trader",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#080d19",
+  "theme_color":"#0b1020",
+  "description":"Adaptive paper-trading simulator with local learning data.",
+  "icons":[]
+}
